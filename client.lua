@@ -1,7 +1,7 @@
 CreateThread(function()
     for i = 1, #Config.Props do
         if Config.Props[i].propcoords ~= nil then
-            local heading = Config.Props[i].propcoords[4]
+            local heading = Config.Props[i].propcoords[4]-180
             RequestModel(Config.Props[i].prop)
             while not HasModelLoaded(Config.Props[i].prop) do
                 Wait(1) 
