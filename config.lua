@@ -1,6 +1,6 @@
 Config = {}
 
-Config.Props = { -- Configuration options for various gas station related things, including peds, coords and labels.
+Config.Props = { 
  --[[   [1] = {
         prop = `gr_prop_gr_bench_04b`,
         propcoords = vector4(166.8, -3021.25, 6.25, 335.62),
