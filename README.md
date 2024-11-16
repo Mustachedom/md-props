@@ -1,6 +1,23 @@
-# md-props
-Easy way to spawn permanent objects throughout your city. 
+<h1> MD-Props</h1>
 
-simply install script in your resources folder.
+<div align="center">
+  <a href="https://discord.gg/sAMzrB4DDx">
+    <img align="center" src="https://i.imgur.com/t65G9Z0.png" width="100">
+  </a><br>
+  <a href="https://discord.gg/sAMzrB4DDx">Mustache Scripts Discord</a><br>
+</div>
 
-make sure to change props and coords from whats in the config! 
+# Dependacies
+- [ox_lib](https://github.com/overextended/ox_lib/) 
+
+# How To Install
+- Step 1: <strong><big>Run Sql</big></strong>
+
+# Features
+- Spawn Objects
+    - edit objects
+    - teleport to objects
+    - change object location
+    - Delete objects
+- nothing else its a quick simple script
+
