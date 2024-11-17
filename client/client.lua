@@ -64,7 +64,7 @@ if not can then return end
 local model = lib.inputDialog('Enter Model Name', {
     {description = 'Type The Model You Want',  type = 'input'}
 })
-if not model[1] then return end
+if not model then return end
 local hash = GetHashKey(model[1])
 if IsModelValid(hash) then 
     local coord, head = StartRay(model[1])
