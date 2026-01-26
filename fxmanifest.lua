@@ -10,10 +10,10 @@ client_script {
 }
 
 server_script {
+       '@oxmysql/lib/MySQL.lua',
     'server/**.lua',
-    '@oxmysql/lib/MySQL.lua',
+ 
 }
 shared_script {
     'config.lua',
-    '@ox_lib/init.lua'
 }

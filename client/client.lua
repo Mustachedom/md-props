@@ -1,20 +1,72 @@
 local objects = {}
 
+local function RotationToDirection(rotation)
+    local adjustedRotation = {
+        x = (math.pi / 180) * rotation.x,
+        y = (math.pi / 180) * rotation.y,
+        z = (math.pi / 180) * rotation.z
+    }
+    local direction = {
+        x = -math.sin(adjustedRotation.z) * math.abs(math.cos(adjustedRotation.x)),
+        y = math.cos(adjustedRotation.z) * math.abs(math.cos(adjustedRotation.x)),
+        z = math.sin(adjustedRotation.x)
+    }
+    return direction
+end
+
+local function RayCastGamePlayCamera(distance)
+    local currentRenderingCam = false
+    if not IsGameplayCamRendering() then
+        currentRenderingCam = GetRenderingCam()
+    end
+
+    local cameraRotation = not currentRenderingCam and GetGameplayCamRot() or GetCamRot(currentRenderingCam, 2)
+    local cameraCoord = not currentRenderingCam and GetGameplayCamCoord() or GetCamCoord(currentRenderingCam)
+    local direction = RotationToDirection(cameraRotation)
+    local destination = {
+        x = cameraCoord.x + direction.x * distance,
+        y = cameraCoord.y + direction.y * distance,
+        z = cameraCoord.z + direction.z * distance
+    }
+    local _, hit, endCoords, surfaceNormal, entityHit  = GetShapeTestResult(StartShapeTestRay(cameraCoord.x, cameraCoord.y, cameraCoord.z, destination.x, destination.y, destination.z, -1, PlayerPedId(), 0))
+    return _, hit, endCoords, surfaceNormal, entityHit
+end
+
+local function ray()
+   local _, hit, endCoords, surfaceNormal, entityHit  = RayCastGamePlayCamera(1000.0)
+    return hit, endCoords, surfaceNormal, entityHit
+end
+
+local function requestModel(modelHash, timeout)
+    local model = (type(modelHash) == 'number' and modelHash or GetHashKey(modelHash))
+    local start = GetGameTimer()
+    if not HasModelLoaded(model) then
+        RequestModel(model)
+        while not HasModelLoaded(model) do
+            Wait(10)
+            if timeout and GetGameTimer() - start >= timeout then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 local run = false
 local function StartRay(obj)
 	local heading = 180.0
 	local created = false
 	local coord = GetEntityCoords(PlayerPedId())
-	lib.requestModel(obj, 30000)
+	requestModel(obj, 30000)
     local entity = CreateObject(obj, coord.x, coord.y, coord.z, false, false)
     local z = math.floor(coord.z * 100) / 100
     run = true
     repeat
-
-        local hit, entityHit, endCoords, surfaceNormal, matHash = lib.raycast.cam(511, 4, 30)
+        Wait(0)
+        local hit, endCoords, surfaceNormal, entityHit = ray()
         if not created then 
             created = true
-            lib.showTextUI('[E] To Place  \n  [DEL] To Cancel  \n  [<-] To Move Left  \n  [->] To Move Right')
+            Bridge.HelpText.ShowHelpText('[E] To Place  \n  [DEL] To Cancel  \n  [<-] To Move Left  \n  [->] To Move Right')
         else
             SetEntityCoords(entity, endCoords.x, endCoords.y, z)
             SetEntityHeading(entity, heading)
@@ -25,7 +77,7 @@ local function StartRay(obj)
         if IsControlPressed(0, 172) then z = z + 0.1 end 
         if IsControlPressed(0, 173) then z = z - 0.1 end
         if IsControlPressed(0, 38) then
-            lib.hideTextUI()
+            Bridge.HelpText.HideHelpText()
             run = false
             DeleteEntity(entity)
             local loc ={x = math.floor(endCoords.x * 100) / 100, y = math.floor(endCoords.y * 100) / 100, z = math.floor(endCoords.z * 100) / 100}
@@ -33,7 +85,7 @@ local function StartRay(obj)
         end
 
         if IsControlPressed(0, 178) then
-            lib.hideTextUI()
+            Bridge.HelpText.HideHelpText()
             run = false
             DeleteEntity(entity)
             return nil
@@ -42,65 +94,69 @@ local function StartRay(obj)
 end
 
 local function spawn()
-    for k, v in pairs (objects) do
-        DeleteEntity(v.object)
-        table.remove(objects, k)
-    end
-    local list = lib.callback.await('md-props:getObjects', false)
+    local list = Bridge.Callback.Trigger('md-props:getObjects', false)
     if list == 'No Objects' then print('No Objects: Add Some Nerd') return end
     for k, v in pairs (list) do
-        local coords = json.decode(v.loc)
-        lib.requestModel(v.model, 30000)
+        local coords = v.loc
+        requestModel(v.model, 30000)
         local obj = CreateObject(v.model, coords.x, coords.y, coords.z, false, true, true)
         SetEntityHeading(obj, coords.w)
         FreezeEntityPosition(obj, true)
-        table.insert(objects, {object = obj, coords = coords, model = v.model, id = v.id})
+        objects[k] = {object = obj, coords = coords, model = v.model, id = v.id}
     end
 end
 
-RegisterNetEvent('md-props:addObject', function()
-local can = lib.callback.await('md-props:check', false)
-if not can then return end
-local model = lib.inputDialog('Enter Model Name', {
-    {description = 'Type The Model You Want',  type = 'input'}
-})
-if not model then return end
-local hash = GetHashKey(model[1])
-if IsModelValid(hash) then 
-    local coord, head = StartRay(model[1])
+local function newSpawn(data)
+    for k, v in pairs (objects) do
+        DeleteEntity(v.object)
+        objects[k] = nil
+    end
+    for k, v in pairs (data) do
+        local coords = v.loc
+        requestModel(v.model, 30000)
+        local obj = CreateObject(v.model, coords.x, coords.y, coords.z, false, true, true)
+        SetEntityHeading(obj, coords.w)
+        FreezeEntityPosition(obj, true)
+        objects[k] = {object = obj, coords = coords, model = v.model, id = v.id}
+    end
+end
+
+RegisterNetEvent('md-props:addObject', function(model)
+    local can = Bridge.Callback.Trigger('md-props:check', false)
+    if not can then return end
+    local coord, head = StartRay(model)
     if coord then
-        TriggerServerEvent('md-props:placeObject', coord, head, model[1])
+        TriggerServerEvent('md-props:placeObject', coord, head, model)
     end
-end
 end)
 
-CreateThread(function()
-    spawn()
-end)
-
-RegisterNetEvent('md-props:updateObjects', function()
-    spawn()
-end)
+AddEventHandler('QBCore:Client:OnPlayerLoaded', function() spawn() end)
+AddEventHandler('esx:playerLoaded', function(playerData)  spawn()end)
+RegisterNetEvent('md-props:updateObjects', function(data) newSpawn(data) end)
 
 AddEventHandler('onResourceStop', function(resource)
     if resource == GetCurrentResourceName() then
-        for i = 1, #objects do
-            DeleteEntity(objects[i].object)
+        for k, v in pairs(objects) do
+            DeleteEntity(v.object)
         end
         objects = {}
     end
 end)
 
+AddEventHandler('onResourceStart', function(resource)
+    if resource == GetCurrentResourceName() then
+        spawn()
+    end
+end)
 RegisterNetEvent('md-props:editObject', function()
     local options = {}
-
     for k, v in pairs(objects) do
         local coord = v.coords
         options[#options + 1] = {
             title = 'Model: ' .. v.model,
             description = string.format('vector4(%s, %s, %s, %s)', coord.x, coord.y, coord.z, coord.w),
             onSelect = function()
-                lib.registerContext({
+                Bridge.Menu.Open({
                     id = 'edit_Objects',
                     title = 'Edit Object',
                     options = {
@@ -122,7 +178,7 @@ RegisterNetEvent('md-props:editObject', function()
                         {
                             title = 'Edit Model',
                             onSelect = function()
-                                local model = lib.inputDialog('Enter Model Name', {
+                                local model = Bridge.Input.Open('Enter Model Name', {
                                     {description = 'Type The Model You Want', type = 'input'}
                                 })
                                 if not model or not model[1] then return end
@@ -135,15 +191,13 @@ RegisterNetEvent('md-props:editObject', function()
                         {
                             title = 'Teleport To Object',
                             onSelect = function()
-                                SetEntityCoords(PlayerPedId(), coord.x, coord.y, coord.z)
+                                TriggerServerEvent('md-props:goto', v.id)
                             end
                         }
                     }
                 })
-                lib.showContext('edit_Objects')
             end
         }
     end
-    lib.registerContext({    id = 'edit_ObjectsMenu',    title = 'Edit Object',    options = options})
-    lib.showContext('edit_ObjectsMenu')
+    Bridge.Menu.Open({    id = 'edit_ObjectsMenu',    title = 'Edit Object',    options = options})
 end)
